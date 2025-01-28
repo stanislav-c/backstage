@@ -15,3 +15,5 @@
  */
 
 export { appPlugin as default } from './service/appPlugin';
+
+console.log('whatever');
