@@ -1,0 +1,12 @@
+name: Validate Ownership
+
+on:
+  check_suite:
+  check_run:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo ${{ github.event }}
