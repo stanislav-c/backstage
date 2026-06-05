@@ -3066,6 +3066,7 @@ export const SwitchDefinition: {
     readonly root: 'bui-Switch';
     readonly indicator: 'bui-SwitchIndicator';
   };
+  readonly bg: 'consumer';
   readonly propDefs: {
     readonly label: {};
     readonly className: {};

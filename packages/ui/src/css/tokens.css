@@ -224,7 +224,7 @@
     /* Foreground colors */
     --bui-fg-primary: var(--bui-white);
     --bui-fg-secondary: #a3a3a3;
-    --bui-fg-disabled: var(--bui-white);
+    --bui-fg-disabled: #707070;
     --bui-fg-positive: #21b656;
     --bui-fg-negative: #ee3a4c;
     --bui-fg-warning: #f18900;
