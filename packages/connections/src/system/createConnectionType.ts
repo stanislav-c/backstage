@@ -14,61 +14,133 @@
  * limitations under the License.
  */
 import { z } from 'zod/v4';
+import { InputError } from '@backstage/errors';
+import type { Expand, JsonObject } from '@backstage/types';
 import type {
-  ConnectionAuthMethod,
   ConnectionType,
+  LookupStrategy,
+  LookupStrategyQuery,
   MatchAuth,
+  PortableSchema,
+  WithoutReservedAuthMethods,
   WithoutReservedFields,
 } from '../api/ConnectionType';
 
-const matchSchema = z
-  .object({ plugins: z.array(z.string()) })
-  .strict()
-  .optional();
+type ConnectionAuthMethodSchema<
+  TMethod extends string = string,
+  TConfigSchema extends z.ZodObject = z.ZodObject,
+> = {
+  method: TMethod;
+  title: string;
+  configSchema: TConfigSchema;
+};
+
+type ConfigFromSchema<TConfigSchema extends z.ZodObject> =
+  z.infer<TConfigSchema> extends Record<string, never>
+    ? Record<never, never>
+    : z.infer<TConfigSchema>;
+
+// Expand flattens the intersection into a single object literal so that
+// editor tooltips show each auth method variant as a readable flat shape
+// rather than a chain of truncated intersections.
+type RootConnectionAuthFromSchema<
+  TAuthMethod extends ConnectionAuthMethodSchema,
+> = TAuthMethod extends ConnectionAuthMethodSchema<
+  infer TMethod,
+  infer TConfigSchema
+>
+  ? Expand<{ method: TMethod } & ConfigFromSchema<TConfigSchema>>
+  : never;
+
+function createPortableSchema<TSchema extends z.ZodType>(
+  schema: TSchema,
+  errorMessage: string,
+): PortableSchema<z.infer<TSchema>, unknown> {
+  let cachedJsonSchema: JsonObject | undefined;
+  return {
+    parse(input: unknown) {
+      try {
+        return schema.parse(input);
+      } catch (cause) {
+        if (cause instanceof z.ZodError) {
+          throw new InputError(errorMessage, cause);
+        }
+        throw cause;
+      }
+    },
+    schema() {
+      if (!cachedJsonSchema) {
+        cachedJsonSchema = schema.toJSONSchema({
+          target: 'draft-07',
+          io: 'input',
+        }) as JsonObject;
+      }
+      return { schema: structuredClone(cachedJsonSchema) };
+    },
+  };
+}
 
 export function createConnectionType<
   TType extends string,
   TConfigSchema extends z.ZodObject,
-  const TAuthMethods extends readonly ConnectionAuthMethod[],
+  const TAuthMethods extends readonly ConnectionAuthMethodSchema[],
+  TLookupStrategy extends LookupStrategy = 'host',
 >({
   configSchema,
   type,
+  title,
+  lookupStrategy,
   authMethods,
   matchAuth,
 }: {
   type: TType;
+  title: string;
+  lookupStrategy?: TLookupStrategy;
   configSchema: WithoutReservedFields<TConfigSchema>;
-  authMethods: TAuthMethods;
-  matchAuth?: MatchAuth<TAuthMethods>;
-}): ConnectionType<TType, TConfigSchema, TAuthMethods> {
-  const authOptions = authMethods.map(am =>
-    am.configSchema
-      .extend({
-        method: z.literal(am.method),
-        match: matchSchema,
-      })
-      .strict(),
+  authMethods: WithoutReservedAuthMethods<TAuthMethods>;
+  matchAuth?: MatchAuth<
+    RootConnectionAuthFromSchema<TAuthMethods[number]>,
+    LookupStrategyQuery[TLookupStrategy]
+  >;
+}): ConnectionType<{
+  type: TType;
+  lookupStrategy: TLookupStrategy;
+  query: LookupStrategyQuery[TLookupStrategy];
+  configSchema: ConfigFromSchema<TConfigSchema>;
+  auth: readonly RootConnectionAuthFromSchema<TAuthMethods[number]>[];
+}> {
+  const validatedAuthMethods = authMethods as TAuthMethods;
+  if (validatedAuthMethods.length < 1) {
+    throw new InputError(
+      `Connection type "${type}" must declare at least one auth method`,
+    );
+  }
+  const portableConfigSchema = createPortableSchema(
+    (configSchema as unknown as TConfigSchema).strict(),
+    `Invalid configuration for connection type "${type}"`,
   );
-  const validated = configSchema as unknown as TConfigSchema;
-  const schema = validated
-    .extend({
-      type: z.literal(type),
-      match: matchSchema,
-      auth: z.array(
-        authOptions.length === 1
-          ? authOptions[0]
-          : z.discriminatedUnion(
-              'method',
-              authOptions as [(typeof authOptions)[0], ...typeof authOptions],
-            ),
-      ),
-    })
-    .strict();
+
   return {
     type,
-    configSchema: validated,
-    authMethods,
-    schema,
+    title,
+    lookupStrategy: lookupStrategy ?? 'host',
+    authMethods: validatedAuthMethods.map(
+      ({ method, title: authTitle, configSchema: authConfigSchema }) => ({
+        method,
+        title: authTitle,
+        configSchema: createPortableSchema(
+          authConfigSchema,
+          `Invalid configuration for auth method "${method}" of connection type "${type}"`,
+        ),
+      }),
+    ),
+    configSchema: portableConfigSchema,
     matchAuth,
-  };
+  } as unknown as ConnectionType<{
+    type: TType;
+    lookupStrategy: TLookupStrategy;
+    query: LookupStrategyQuery[TLookupStrategy];
+    configSchema: ConfigFromSchema<TConfigSchema>;
+    auth: readonly RootConnectionAuthFromSchema<TAuthMethods[number]>[];
+  }>;
 }

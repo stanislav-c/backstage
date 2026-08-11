@@ -128,6 +128,25 @@ Valid values are:
 
 - `catalogRelation` - This configuration assumes that the current component runs only on all clusters it is dependant on.
 
+### `clusterLocatorContinueOnError` (optional)
+
+Controls whether the Kubernetes backend continues returning clusters when one
+or more cluster locators fail. When set to `true`, errors from individual
+locators are logged and clusters from the remaining successful locators are
+still returned. When set to `false` (the default), a single locator failure
+causes the entire cluster list request to fail.
+
+This is useful when you have multiple cluster locators configured and want to
+avoid a problem with one source (for example, a permission error in a single GKE
+project) from blocking all other clusters.
+
+```yaml
+kubernetes:
+  clusterLocatorContinueOnError: true
+```
+
+The default value is `false`.
+
 ### `clusterLocatorMethods`
 
 This is an array used to determine where to retrieve cluster configuration from.
@@ -395,7 +414,7 @@ clusterLinksFormatters.myDashboard = (options) => ...;
 ```
 
 See also
-https://github.com/backstage/backstage/tree/master/plugins/kubernetes/src/utils/clusterLinks/formatters
+<https://github.com/backstage/backstage/tree/master/plugins/kubernetes-react/src/api/formatters>
 for real examples.
 
 ##### `clusters.\*.dashboardParameters` (optional)
@@ -445,14 +464,14 @@ This value could be obtained via inspecting the `kubeconfig` file (usually
 at `~/.kube/config`) under `clusters[*].cluster.certificate-authority-data`. For
 GKE, execute the following command to obtain the value
 
-```
+```shell
 gcloud container clusters describe <YOUR_CLUSTER_NAME> \
     --zone=<YOUR_COMPUTE_ZONE> \
     --format="value(masterAuth.clusterCaCertificate)"
 ```
 
 See also
-https://cloud.google.com/kubernetes-engine/docs/how-to/api-server-authentication#environments-without-gcloud
+<https://cloud.google.com/kubernetes-engine/docs/how-to/api-server-authentication#environments-without-gcloud>
 for complete docs about GKE without `gcloud`.
 
 ##### `clusters.\*.caFile` (optional)
@@ -554,7 +573,7 @@ about resources.
 Defaults to `google` which leverages the logged in user's Google OAuth credentials.
 
 Set to `googleServiceAccount` to leverage
-Application Default Credentials (https://cloud.google.com/docs/authentication/application-default-credentials).
+Application Default Credentials (<https://cloud.google.com/docs/authentication/application-default-credentials>).
 To use a service account JSON key (not recommended), set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable
 on the Backstage backend to the path of the service account key file.
 

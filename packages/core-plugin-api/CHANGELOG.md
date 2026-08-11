@@ -1,5 +1,33 @@
 # @backstage/core-plugin-api
 
+## 1.12.9-next.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @backstage/frontend-plugin-api@0.18.0-next.0
+
+## 1.12.8
+
+### Patch Changes
+
+- Updated dependencies
+  - @backstage/frontend-plugin-api@0.17.3
+
+## 1.12.8-next.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @backstage/frontend-plugin-api@0.17.3-next.0
+
+## 1.12.7
+
+### Patch Changes
+
+- Updated dependencies
+  - @backstage/frontend-plugin-api@0.17.2
+
 ## 1.12.7-next.0
 
 ### Patch Changes

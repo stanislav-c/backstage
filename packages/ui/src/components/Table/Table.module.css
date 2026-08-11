@@ -27,7 +27,13 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
+  }
+
+  .bui-TableScrollContainer {
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   }
 
   .bui-Table {
@@ -38,9 +44,6 @@
     border-collapse: collapse;
     table-layout: fixed;
     transition: opacity 0.2s ease-in-out;
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
 
     &[data-stale='true'],
     &[data-ispending='true'] {

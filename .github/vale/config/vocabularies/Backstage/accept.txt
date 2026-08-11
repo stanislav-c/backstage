@@ -11,7 +11,9 @@ ajv
 Alaria
 Alef
 allowedHosts
+allowlist
 allowlisted
+allowlists
 Anddddd
 Apdex
 api
@@ -27,6 +29,7 @@ autoscaling
 autoselect
 Avro
 backend's
+backoff
 backported
 backporting
 BEPs
@@ -312,6 +315,7 @@ neuro
 newrelic
 nginx
 nodegit
+nodemailer
 nodejs
 nohoist
 nonces
@@ -319,6 +323,7 @@ noop
 npm
 nullable
 nunjucks
+nunjitsu
 nvarchar
 nvm
 OAuth
@@ -330,6 +335,7 @@ Oldsberg
 onboarded
 onboarding
 onelogin
+oasdiff
 openapi
 OpenSearch
 OpenShift
@@ -559,9 +565,11 @@ unreviewed
 unstarred
 untemplated
 untracked
+untrusted
 upsert
 upstreams
 upvote
+UIs
 URIs
 url
 URLs

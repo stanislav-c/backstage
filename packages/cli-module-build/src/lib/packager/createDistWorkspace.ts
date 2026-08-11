@@ -37,7 +37,7 @@ import {
   getOutputsForRole,
   Output,
 } from '../builder';
-import { productionPack } from './productionPack';
+import { compilePackageConfigSchemas, productionPack } from './productionPack';
 import {
   BackstagePackage,
   PackageRoles,
@@ -326,6 +326,9 @@ async function moveToDistWorkspace(
       FAST_PACK_SCRIPTS.includes(pkg.packageJson.scripts?.prepack),
   );
 
+  const configSchemas = await compilePackageConfigSchemas(fastPackPackages, {
+    onSchemaError: error => logger.warn(error.message),
+  });
   const featureDetectionProject =
     fastPackPackages.length > 0 && enableFeatureDetection
       ? await createTypeDistProject()
@@ -341,6 +344,7 @@ async function moveToDistWorkspace(
       await productionPack({
         packageDir: target.dir,
         targetDir: absoluteOutputPath,
+        configSchema: configSchemas.get(target.name),
         featureDetectionProject,
       });
     }),
