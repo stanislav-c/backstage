@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '*/5 * * * *'
 
+permissions: {}
+
 jobs:
   cron:
     runs-on: ubuntu-latest
@@ -14,8 +16,19 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: backstage/actions/cron@7137f70a0e1e756bd3693c8570ae496d87637af5 # v0.7.11
+      - name: Generate dependency merger token
+        id: dependency-merger-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.BACKSTAGE_DEPENDENCY_MERGER_CLIENT_ID }}
+          private-key: ${{ secrets.BACKSTAGE_DEPENDENCY_MERGER_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - uses: backstage/actions/cron@a9e1b58ad52aaf319264e18c3ff6887a4c824b52 # v0.7.13
         with:
           app-id: ${{ secrets.BACKSTAGE_GOALIE_APPLICATION_ID }}
           private-key: ${{ secrets.BACKSTAGE_GOALIE_PRIVATE_KEY }}
           installation-id: ${{ secrets.BACKSTAGE_GOALIE_INSTALLATION_ID }}
+          merge-token: ${{ steps.dependency-merger-token.outputs.token }}

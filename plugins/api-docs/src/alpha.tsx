@@ -21,6 +21,7 @@ import {
   PageBlueprint,
   createFrontendPlugin,
 } from '@backstage/frontend-plugin-api';
+import { z } from 'zod/v4';
 
 import {
   ApiEntity,
@@ -32,7 +33,6 @@ import { defaultDefinitionWidgets } from './components/ApiDefinitionCard';
 import { rootRoute, registerComponentRouteRef } from './routes';
 import { apiDocsConfigRef } from './config';
 import { AppIcon } from '@backstage/core-components';
-import { z } from 'zod';
 
 import {
   EntityCardBlueprint,
