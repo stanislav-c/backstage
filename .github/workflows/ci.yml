@@ -30,7 +30,7 @@ jobs:
     name: Install ${{ matrix.node-version }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -46,7 +46,7 @@ jobs:
           name: pr-context
           path: context/
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: use node.js ${{ matrix.node-version }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -55,7 +55,7 @@ jobs:
           registry-url: https://registry.npmjs.org/ # Needed for auth
 
       - name: yarn install
-        uses: backstage/actions/yarn-install@7da58d8d1e914892549d73ae9b291acb640b61f9 # v0.7.12
+        uses: backstage/actions/yarn-install@a9e1b58ad52aaf319264e18c3ff6887a4c824b52 # v0.7.13
         with:
           cache-prefix: ${{ runner.os }}-v${{ matrix.node-version }}
 
@@ -78,11 +78,11 @@ jobs:
     name: Verify ${{ matrix.node-version }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: use node.js ${{ matrix.node-version }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -91,7 +91,7 @@ jobs:
           registry-url: https://registry.npmjs.org/ # Needed for auth
 
       - name: yarn install
-        uses: backstage/actions/yarn-install@7da58d8d1e914892549d73ae9b291acb640b61f9 # v0.7.12
+        uses: backstage/actions/yarn-install@a9e1b58ad52aaf319264e18c3ff6887a4c824b52 # v0.7.13
         with:
           cache-prefix: ${{ runner.os }}-v${{ matrix.node-version }}
 
@@ -187,14 +187,14 @@ jobs:
     name: Spell Check
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: check for typos
-        uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
+        uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
         with:
           config: typos.toml
 
@@ -213,7 +213,7 @@ jobs:
     name: Test ${{ matrix.node-version }}
     services:
       postgres18:
-        image: postgres:18
+        image: postgres:18@sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe6a4144637a9dfe8cf
         env:
           POSTGRES_PASSWORD: postgres
         options: >-
@@ -224,7 +224,7 @@ jobs:
         ports:
           - 5432/tcp
       postgres14:
-        image: postgres:14
+        image: postgres:14@sha256:ceef4a62198b562d6fe3e51be67362f72a0abf0aaa255f54f0c0e55be9768ed2
         env:
           POSTGRES_PASSWORD: postgres
         options: >-
@@ -235,7 +235,7 @@ jobs:
         ports:
           - 5432/tcp
       mysql8:
-        image: mysql:8.4
+        image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
         env:
           MYSQL_ROOT_PASSWORD: root
         options: >-
@@ -246,7 +246,7 @@ jobs:
         ports:
           - 3306/tcp
       redis:
-        image: redis:7
+        image: redis:7@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -264,7 +264,7 @@ jobs:
       INTEGRATION_TEST_AZURE_TOKEN: ${{ secrets.INTEGRATION_TEST_AZURE_TOKEN }}
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
         # Only trees and paths are needed here, to check the release and to scope
         # linting and testing to changed packages, so skip historical blob
@@ -284,7 +284,7 @@ jobs:
           registry-url: https://registry.npmjs.org/ # Needed for auth
 
       - name: yarn install
-        uses: backstage/actions/yarn-install@7da58d8d1e914892549d73ae9b291acb640b61f9 # v0.7.12
+        uses: backstage/actions/yarn-install@a9e1b58ad52aaf319264e18c3ff6887a4c824b52 # v0.7.13
         with:
           cache-prefix: ${{ runner.os }}-v${{ matrix.node-version }}
 
@@ -294,7 +294,7 @@ jobs:
 
       # Use the lower-level cache actions for the success cache, so that we can store the cache even on failed builds
       - name: restore backstage-cli cache
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .cache/backstage-cli
           key: ${{ runner.os }}-v${{ matrix.node-version }}-backstage-cli-${{ github.run_id }}
@@ -319,7 +319,7 @@ jobs:
 
       # Save successful test results even if other tests failed
       - name: save backstage-cli cache
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
         with:
           path: .cache/backstage-cli

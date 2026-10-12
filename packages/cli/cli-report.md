@@ -620,6 +620,7 @@ Options:
   --clearMocks
   --collectCoverage
   --collectCoverageFrom
+  --collectTests
   --color
   --colors
   --coverage
@@ -703,6 +704,7 @@ Options:
   --watchAll
   --watchPathIgnorePatterns
   --watchman
+  --workerGracefulExitTimeout
   --workerThreads
   -b, --bail
   -c, --config
@@ -736,6 +738,7 @@ Commands:
 Usage: backstage-cli pm verify-patches [flags...]
 
 Options:
+  --fix
   -h, --help
 ```
 

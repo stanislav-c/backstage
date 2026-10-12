@@ -110,9 +110,20 @@ describe('useOwnedEntitiesCount', () => {
 
     await waitFor(() =>
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: {
-          'metadata.namespace': ['a-namespace'],
-          'relations.ownedBy': ['user:default/spiderman', 'user:group/a-group'],
+        query: {
+          $all: [
+            { 'metadata.namespace': 'a-namespace' },
+            {
+              relations: {
+                $contains: {
+                  type: 'ownedBy',
+                  targetRef: {
+                    $in: ['user:default/spiderman', 'user:group/a-group'],
+                  },
+                },
+              },
+            },
+          ],
         },
         limit: 0,
       }),
@@ -219,9 +230,15 @@ describe('useOwnedEntitiesCount', () => {
 
     await waitFor(() =>
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: {
-          'metadata.namespace': ['a-namespace'],
-          'relations.ownedBy': ['user:group/a-group'],
+        query: {
+          $all: [
+            { 'metadata.namespace': 'a-namespace' },
+            {
+              relations: {
+                $contains: { type: 'ownedBy', targetRef: 'user:group/a-group' },
+              },
+            },
+          ],
         },
         limit: 0,
       }),

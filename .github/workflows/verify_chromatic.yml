@@ -31,12 +31,12 @@ jobs:
     name: Chromatic
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
       - name: Checkout code
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # Required to retrieve git history
           filter: blob:none
@@ -48,7 +48,7 @@ jobs:
           registry-url: https://registry.npmjs.org/ # Needed for auth
 
       - name: Install dependencies
-        uses: backstage/actions/yarn-install@7da58d8d1e914892549d73ae9b291acb640b61f9 # v0.7.12
+        uses: backstage/actions/yarn-install@a9e1b58ad52aaf319264e18c3ff6887a4c824b52 # v0.7.13
         with:
           cache-prefix: ${{ runner.os }}-v${{ matrix.node-version }}
 
@@ -57,7 +57,7 @@ jobs:
 
       - name: Run Chromatic
         id: chromatic
-        uses: chromaui/action@bb3b582719a93c1828c5e520e62992b2937d7889 # latest
+        uses: chromaui/action@38afd264ef2241136f12d039093c2724748bec08 # latest
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # projectToken intentionally shared to allow collaborators to run Chromatic on forks

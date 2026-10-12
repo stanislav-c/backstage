@@ -21,7 +21,14 @@ import { ScmIntegrationRegistry } from '@backstage/integration';
 import { SpawnOptionsWithoutStdio, spawn } from 'node:child_process';
 import fs from 'fs-extra';
 import gitUrlParse from 'git-url-parse';
-import yaml, { DEFAULT_SCHEMA, Type } from 'js-yaml';
+import * as yaml from 'js-yaml';
+import {
+  defineMappingTag,
+  defineScalarTag,
+  defineSequenceTag,
+  mapTag,
+  YAML11_SCHEMA,
+} from 'js-yaml';
 import path, { resolve as resolvePath } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { ParsedLocationAnnotation } from '../../helpers';
@@ -128,9 +135,32 @@ export const getRepoUrlFromLocationAnnotation = (
   return {};
 };
 
+// Listed exactly rather than by a `pymdownx.` prefix: resolving one of these
+// tags imports the module it names, and a prefix would accept any module-level
+// attribute of any importable submodule.
 const ALLOWED_PYTHON_YAML_TAGS = new Set([
+  // Emoji indexes; mkdocs-material moved its own from materialx to
+  // material.extensions in 9.4.
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.emojione',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.gemoji',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.twemoji',
   'tag:yaml.org,2002:python/name:materialx.emoji.twemoji',
-  'tag:yaml.org,2002:python/object.apply:materialx.emoji.to_svg',
+  'tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji',
+  // Emoji generators
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.to_alt',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.to_png',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.to_png_sprite',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.to_svg',
+  'tag:yaml.org,2002:python/name:pymdownx.emoji.to_svg_sprite',
+  'tag:yaml.org,2002:python/name:materialx.emoji.to_svg',
+  'tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg',
+  // Custom fence formats, used for Mermaid diagrams. The mermaid2 ones come
+  // from mkdocs-mermaid2, which mkdocs-techdocs-core does not bundle.
+  'tag:yaml.org,2002:python/name:pymdownx.superfences.fence_code_format',
+  'tag:yaml.org,2002:python/name:pymdownx.superfences.fence_div_format',
+  'tag:yaml.org,2002:python/name:mermaid2.fence_mermaid',
+  'tag:yaml.org,2002:python/name:mermaid2.fence_mermaid_custom',
+  // Slug factory for toc and pymdownx.tabbed
   'tag:yaml.org,2002:python/object/apply:pymdownx.slugs.slugify',
 ]);
 
@@ -151,32 +181,42 @@ export class UnknownTag {
   }
 }
 
-export const MKDOCS_SCHEMA = DEFAULT_SCHEMA.extend([
-  new Type('', {
-    kind: 'scalar',
-    multi: true,
-    representName: o => (o as UnknownTag).type,
-    represent: o => (o as UnknownTag).data ?? '',
-    instanceOf: UnknownTag,
-    construct: (data: string, type?: string) => new UnknownTag(data, type),
+/** Preserve YAML merge keys and MkDocs-specific tags while inspecting config. */
+export const MKDOCS_SCHEMA = YAML11_SCHEMA.withTags(
+  defineScalarTag('', {
+    matchByTagPrefix: true,
+    resolve: (data, _isExplicit, tagName) => new UnknownTag(data, tagName),
+    identify: data =>
+      data instanceof UnknownTag && typeof data.data === 'string',
+    represent: data => data.data,
+    representTagName: data => data.type,
   }),
-  new Type('tag:', {
-    kind: 'mapping',
-    multi: true,
-    representName: o => (o as UnknownTag).type,
-    represent: o => (o as UnknownTag).data ?? '',
-    instanceOf: UnknownTag,
-    construct: (data: string, type?: string) => new UnknownTag(data, type),
+  defineSequenceTag<UnknownTag>('', {
+    matchByTagPrefix: true,
+    create: tagName => new UnknownTag([], tagName),
+    addItem: (carrier, item) => {
+      carrier.data.push(item);
+    },
+    identify: data => data instanceof UnknownTag && Array.isArray(data.data),
+    represent: data => data.data,
+    representTagName: data => data.type,
   }),
-  new Type('', {
-    kind: 'sequence',
-    multi: true,
-    representName: o => (o as UnknownTag).type,
-    represent: o => (o as UnknownTag).data ?? '',
-    instanceOf: UnknownTag,
-    construct: (data: string, type?: string) => new UnknownTag(data, type),
+  defineMappingTag<UnknownTag>('tag:', {
+    matchByTagPrefix: true,
+    create: tagName => new UnknownTag({}, tagName),
+    addPair: (carrier, key, value) => mapTag.addPair(carrier.data, key, value),
+    has: (carrier, key) => mapTag.has(carrier.data, key),
+    keys: result => mapTag.keys(result.data),
+    get: (result, key) => mapTag.get(result.data, key),
+    identify: data =>
+      data instanceof UnknownTag &&
+      typeof data.data === 'object' &&
+      data.data !== null &&
+      !Array.isArray(data.data),
+    represent: data => new Map(Object.entries(data.data)),
+    representTagName: data => data.type,
   }),
-]);
+);
 
 /**
  * Generates a mkdocs.yml configuration file

@@ -70,8 +70,10 @@ describe('useAllEntitiesCount', () => {
 
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: {
-          'relations.ownedBy': ['user:default/owner'],
+        query: {
+          relations: {
+            $contains: { type: 'ownedBy', targetRef: 'user:default/owner' },
+          },
         },
         limit: 0,
       });

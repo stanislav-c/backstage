@@ -42,8 +42,9 @@ import {
   EntityUserFilter,
 } from '../filters';
 import { createDeferred } from '@backstage/types';
-import { EntityListPagination } from '../types';
+import { EntityFilter, EntityListPagination } from '../types';
 import {
+  DefaultEntityFilters,
   EntityListContextProps,
   EntityListProvider,
   NewEntityListContext,
@@ -80,14 +81,20 @@ const mockIdentityApi = mockApis.identity({
   userEntityRef: 'user:default/guest',
   ownershipEntityRefs,
 });
+async function* streamOf(response: Promise<GetEntitiesResponse>) {
+  yield (await response).items;
+}
+
 const mockCatalogApi = catalogApiMock.mock({
-  getEntities: jest.fn().mockResolvedValue({ items: entities }),
   queryEntities: jest.fn().mockResolvedValue({
     items: entities,
     pageInfo: { prevCursor: 'prevCursor', nextCursor: 'nextCursor' },
     totalItems: 10,
   }),
   getEntityByRef: jest.fn().mockResolvedValue(undefined),
+  streamEntities: jest
+    .fn()
+    .mockImplementation(() => streamOf(Promise.resolve({ items: entities }))),
 });
 
 const createWrapper =
@@ -150,10 +157,11 @@ describe('<EntityListProvider />', () => {
     });
 
     expect(result.current.entities.length).toBe(2);
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledWith({
-      filter: { kind: 'component' },
-      order: [{ field: 'metadata.name', order: 'asc' }],
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledWith({
+      query: { kind: 'component' },
+      orderFields: [{ field: 'metadata.name', order: 'asc' }],
+      totalItems: 'exclude',
     });
   });
 
@@ -174,7 +182,7 @@ describe('<EntityListProvider />', () => {
     await waitFor(() => {
       expect(result.current.backendEntities.length).toBe(2);
       expect(result.current.entities.length).toBe(1);
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -195,10 +203,11 @@ describe('<EntityListProvider />', () => {
     await waitFor(() => {
       expect(result.current.backendEntities.length).toBe(2);
       expect(result.current.entities.length).toBe(1);
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledWith({
-        filter: { kind: 'component' },
-        order: [{ field: 'metadata.name', order: 'asc' }],
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledWith({
+        query: { kind: 'component' },
+        orderFields: [{ field: 'metadata.name', order: 'asc' }],
+        totalItems: 'exclude',
       });
     });
   });
@@ -251,7 +260,7 @@ describe('<EntityListProvider />', () => {
 
     await waitFor(() => {
       expect(result.current.entities.length).toBe(2);
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
     });
 
     act(() =>
@@ -267,7 +276,7 @@ describe('<EntityListProvider />', () => {
 
     await expect(() =>
       waitFor(() => {
-        expect(mockCatalogApi.getEntities).not.toHaveBeenCalledTimes(1);
+        expect(mockCatalogApi.streamEntities).not.toHaveBeenCalledTimes(1);
       }),
     ).rejects.toThrow();
   });
@@ -282,7 +291,7 @@ describe('<EntityListProvider />', () => {
     });
     expect(result.current.totalItems).toBe(2);
     expect(result.current.backendEntities.length).toBe(2);
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       result.current.updateFilters({
@@ -292,16 +301,19 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenNthCalledWith(2, {
-        filter: { kind: 'api', 'spec.type': ['service'] },
-        order: [{ field: 'metadata.name', order: 'asc' }],
+      expect(mockCatalogApi.streamEntities).toHaveBeenNthCalledWith(2, {
+        query: { $all: [{ kind: 'api' }, { 'spec.type': 'service' }] },
+        orderFields: [{ field: 'metadata.name', order: 'asc' }],
+        totalItems: 'exclude',
       });
     });
   });
 
   it('does not re-fetch when backend filter params are unchanged', async () => {
     const deferred = createDeferred<GetEntitiesResponse>();
-    mockCatalogApi.getEntities!.mockReturnValueOnce(deferred);
+    mockCatalogApi.streamEntities!.mockImplementationOnce(() =>
+      streamOf(deferred),
+    );
 
     const { result } = renderHook(() => useEntityList(), {
       wrapper: createWrapper({ pagination }),
@@ -314,7 +326,7 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
     });
 
     act(() => {
@@ -336,7 +348,47 @@ describe('<EntityListProvider />', () => {
       expect(result.current.backendEntities.length).toBe(2);
     });
 
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not rewrite the URL when the serialized filters are unchanged', async () => {
+    // Delegate to the real implementation so window.location actually
+    // reflects the rewritten URL, which is what the guard compares against.
+    const replaceStateSpy = jest.fn(
+      (...args: Parameters<History['replaceState']>) =>
+        origReplaceState.apply(window.history, args),
+    );
+    window.history.replaceState = replaceStateSpy;
+
+    const { result } = renderHook(() => useEntityList(), {
+      wrapper: createWrapper({ pagination }),
+    });
+
+    // Applying the user filter changes the URL, so the URL is rewritten once.
+    act(() => {
+      result.current.updateFilters({ user: EntityUserFilter.all() });
+    });
+
+    await waitFor(() => {
+      expect(replaceStateSpy).toHaveBeenCalled();
+    });
+    const callsAfterChange = replaceStateSpy.mock.calls.length;
+
+    // Re-applying an equivalent filter produces a fresh requestedFilters
+    // object that serializes to the same URL (mirrors the UserListPicker
+    // `?filters[user]=all` churn). The URL must not be rewritten again,
+    // since repeated replaceState calls crash Safari with a SecurityError.
+    act(() => {
+      result.current.updateFilters({ user: EntityUserFilter.all() });
+    });
+
+    await expect(
+      waitFor(() => {
+        expect(replaceStateSpy.mock.calls.length).toBeGreaterThan(
+          callsAfterChange,
+        );
+      }),
+    ).rejects.toThrow();
   });
 
   it('returns an error on catalogApi failure', async () => {
@@ -351,7 +403,9 @@ describe('<EntityListProvider />', () => {
 
     expect(result.current.totalItems).toBe(2);
 
-    mockCatalogApi.getEntities!.mockRejectedValueOnce('error');
+    mockCatalogApi.streamEntities!.mockImplementationOnce(() =>
+      streamOf(Promise.reject('error')),
+    );
     act(() => {
       result.current.updateFilters({
         kind: new EntityKindFilter('api', 'API'),
@@ -367,7 +421,7 @@ describe('<EntityListProvider />', () => {
       wrapper: createWrapper({ pagination }),
     });
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenCalled();
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalled();
     });
 
     expect(result.current.pageInfo).toBeUndefined();
@@ -386,12 +440,13 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenCalled();
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalled();
     });
 
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledWith({
-      filter: { kind: 'user' },
-      order: [{ field: 'metadata.name', order: 'asc' }],
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledWith({
+      query: { kind: 'user' },
+      orderFields: [{ field: 'metadata.name', order: 'asc' }],
+      totalItems: 'exclude',
     });
   });
 
@@ -408,12 +463,13 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenCalled();
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalled();
     });
 
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledWith({
-      filter: { kind: 'group' },
-      order: [{ field: 'metadata.name', order: 'asc' }],
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledWith({
+      query: { kind: 'group' },
+      orderFields: [{ field: 'metadata.name', order: 'asc' }],
+      totalItems: 'exclude',
     });
   });
 
@@ -425,14 +481,14 @@ describe('<EntityListProvider />', () => {
     await waitFor(() => {
       expect(result.current.backendEntities.length).toBe(2);
     });
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
 
     act(() => {
       result.current.refresh?.();
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(2);
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -449,9 +505,11 @@ describe('<EntityListProvider />', () => {
     });
     expect(result.current.totalItems).toBe(2);
     expect(result.current.backendEntities.length).toBe(2);
-    expect(mockCatalogApi.getEntities).toHaveBeenCalledTimes(1);
+    expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(1);
 
-    mockCatalogApi.getEntities!.mockReturnValueOnce(firstResult);
+    mockCatalogApi.streamEntities!.mockImplementationOnce(() =>
+      streamOf(firstResult),
+    );
 
     await act(async () => {
       result.current.updateFilters({
@@ -460,13 +518,16 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenNthCalledWith(2, {
-        filter: { kind: 'api' },
-        order: [{ field: 'metadata.name', order: 'asc' }],
+      expect(mockCatalogApi.streamEntities).toHaveBeenNthCalledWith(2, {
+        query: { kind: 'api' },
+        orderFields: [{ field: 'metadata.name', order: 'asc' }],
+        totalItems: 'exclude',
       });
     });
 
-    mockCatalogApi.getEntities!.mockReturnValueOnce(secondResult);
+    mockCatalogApi.streamEntities!.mockImplementationOnce(() =>
+      streamOf(secondResult),
+    );
 
     await act(async () => {
       result.current.updateFilters({
@@ -475,9 +536,10 @@ describe('<EntityListProvider />', () => {
     });
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).toHaveBeenNthCalledWith(3, {
-        filter: { kind: 'system' },
-        order: [{ field: 'metadata.name', order: 'asc' }],
+      expect(mockCatalogApi.streamEntities).toHaveBeenNthCalledWith(3, {
+        query: { kind: 'system' },
+        orderFields: [{ field: 'metadata.name', order: 'asc' }],
+        totalItems: 'exclude',
       });
     });
 
@@ -527,10 +589,10 @@ describe('<EntityListProvider pagination />', () => {
     );
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).not.toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).not.toHaveBeenCalledTimes(1);
       expect(result.current.entities.length).toBe(1);
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: { kind: 'component' },
+        query: { kind: 'component' },
         limit,
         orderFields,
         totalItems: 'exclude',
@@ -559,7 +621,7 @@ describe('<EntityListProvider pagination />', () => {
 
     expect(result.current.entities.length).toBe(2);
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-      filter: { kind: 'component' },
+      query: { kind: 'component' },
       limit,
       orderFields,
       totalItems: 'exclude',
@@ -586,9 +648,18 @@ describe('<EntityListProvider pagination />', () => {
     });
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
       expect.objectContaining({
-        filter: {
-          kind: 'component',
-          'relations.ownedBy': ownershipEntityRefs,
+        query: {
+          $all: [
+            { kind: 'component' },
+            {
+              relations: {
+                $contains: {
+                  type: 'ownedBy',
+                  targetRef: ownershipEntityRefs[0],
+                },
+              },
+            },
+          ],
         },
         totalItems: 'exclude',
       }),
@@ -672,9 +743,18 @@ describe('<EntityListProvider pagination />', () => {
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
         expect.objectContaining({
-          filter: {
-            kind: 'component',
-            'relations.ownedBy': ownershipEntityRefs,
+          query: {
+            $all: [
+              { kind: 'component' },
+              {
+                relations: {
+                  $contains: {
+                    type: 'ownedBy',
+                    targetRef: ownershipEntityRefs[0],
+                  },
+                },
+              },
+            ],
           },
           totalItems: 'exclude',
         }),
@@ -701,7 +781,7 @@ describe('<EntityListProvider pagination />', () => {
 
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: { kind: 'api', 'spec.type': ['service'] },
+        query: { $all: [{ kind: 'api' }, { 'spec.type': 'service' }] },
         limit,
         orderFields,
         totalItems: 'exclude',
@@ -900,7 +980,7 @@ describe('<EntityListProvider pagination />', () => {
 
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
         expect.objectContaining({
-          filter: { kind: 'user' },
+          query: { kind: 'user' },
         }),
       );
     });
@@ -923,7 +1003,7 @@ describe('<EntityListProvider pagination />', () => {
 
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
         expect.objectContaining({
-          filter: { kind: 'group' },
+          query: { kind: 'group' },
         }),
       );
     });
@@ -962,10 +1042,10 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
     );
 
     await waitFor(() => {
-      expect(mockCatalogApi.getEntities).not.toHaveBeenCalledTimes(1);
+      expect(mockCatalogApi.streamEntities).not.toHaveBeenCalledTimes(1);
       expect(result.current.entities.length).toBe(1);
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: { kind: 'component' },
+        query: { kind: 'component' },
         limit,
         offset: 0,
         orderFields,
@@ -995,7 +1075,7 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
 
     expect(result.current.entities.length).toBe(2);
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-      filter: { kind: 'component' },
+      query: { kind: 'component' },
       limit,
       offset: 0,
       orderFields,
@@ -1023,9 +1103,18 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
     });
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
       expect.objectContaining({
-        filter: {
-          kind: 'component',
-          'relations.ownedBy': ownershipEntityRefs,
+        query: {
+          $all: [
+            { kind: 'component' },
+            {
+              relations: {
+                $contains: {
+                  type: 'ownedBy',
+                  targetRef: ownershipEntityRefs[0],
+                },
+              },
+            },
+          ],
         },
         totalItems: 'exclude',
       }),
@@ -1109,9 +1198,18 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
         expect.objectContaining({
-          filter: {
-            kind: 'component',
-            'relations.ownedBy': ownershipEntityRefs,
+          query: {
+            $all: [
+              { kind: 'component' },
+              {
+                relations: {
+                  $contains: {
+                    type: 'ownedBy',
+                    targetRef: ownershipEntityRefs[0],
+                  },
+                },
+              },
+            ],
           },
           totalItems: 'exclude',
         }),
@@ -1184,7 +1282,7 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
 
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: { kind: 'api', 'spec.type': ['service'] },
+        query: { $all: [{ kind: 'api' }, { 'spec.type': 'service' }] },
         limit,
         offset: 0,
         orderFields,
@@ -1210,7 +1308,7 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
 
     await waitFor(() => {
       expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith({
-        filter: { kind: 'component' },
+        query: { kind: 'component' },
         limit,
         offset: 10,
         orderFields,
@@ -1262,7 +1360,7 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
 
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
       expect.objectContaining({
-        filter: { kind: 'user' },
+        query: { kind: 'user' },
       }),
     );
   });
@@ -1285,7 +1383,7 @@ describe(`<EntityListProvider pagination={{ mode: 'offset' }} />`, () => {
 
     expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
       expect.objectContaining({
-        filter: { kind: 'group' },
+        query: { kind: 'group' },
       }),
     );
   });
@@ -1346,5 +1444,106 @@ describe('versioned context', () => {
     });
 
     expect(result.current.limit).toBe(277);
+  });
+});
+
+describe('<EntityListProvider /> with predicate queries', () => {
+  type Filters = DefaultEntityFilters & { notExperimental?: EntityFilter };
+  const notExperimental: EntityFilter = {
+    getCatalogQuery: () => ({ $not: { 'spec.lifecycle': 'experimental' } }),
+  };
+  const origReplaceState = window.history.replaceState;
+
+  beforeEach(() => {
+    window.history.replaceState = jest.fn();
+    jest.clearAllMocks();
+  });
+  afterEach(() => {
+    window.history.replaceState = origReplaceState;
+  });
+
+  it('stops streaming once a newer request supersedes it', async () => {
+    const gate = createDeferred<void>();
+    let pulled = 0;
+    mockCatalogApi.streamEntities!.mockImplementationOnce(
+      async function* stream() {
+        pulled += 1;
+        yield [entities[0]];
+        await gate;
+        pulled += 1;
+        yield [entities[1]];
+        pulled += 1;
+        yield [entities[1]];
+      },
+    );
+
+    const { result } = renderHook(() => useEntityList<Filters>(), {
+      wrapper: createWrapper({ pagination: false }),
+    });
+
+    await waitFor(() => expect(pulled).toBe(1));
+    act(() => result.current.updateFilters({ notExperimental }));
+    await waitFor(() => {
+      expect(mockCatalogApi.streamEntities).toHaveBeenCalledTimes(2);
+    });
+    gate.resolve();
+
+    await waitFor(() => {
+      expect(result.current.backendEntities.length).toBe(2);
+    });
+    expect(pulled).toBe(2);
+  });
+
+  it('combines predicates with other filters when not paginating', async () => {
+    const { result } = renderHook(() => useEntityList<Filters>(), {
+      wrapper: createWrapper({ pagination: false }),
+    });
+
+    act(() => result.current.updateFilters({ notExperimental }));
+
+    await waitFor(() => {
+      expect(mockCatalogApi.streamEntities).toHaveBeenLastCalledWith({
+        query: {
+          $all: [
+            { kind: 'component' },
+            { $not: { 'spec.lifecycle': 'experimental' } },
+          ],
+        },
+        orderFields: [{ field: 'metadata.name', order: 'asc' }],
+        totalItems: 'exclude',
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.backendEntities.length).toBe(2);
+    });
+  });
+
+  it('sends the query in offset mode, including for the count', async () => {
+    const { result } = renderHook(() => useEntityList<Filters>(), {
+      wrapper: createWrapper({ pagination: { mode: 'offset' } }),
+    });
+
+    act(() => result.current.updateFilters({ notExperimental }));
+
+    const query = {
+      $all: [
+        { kind: 'component' },
+        { $not: { 'spec.lifecycle': 'experimental' } },
+      ],
+    };
+    await waitFor(() => {
+      expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query,
+          totalItems: 'exclude',
+        }),
+      );
+      expect(mockCatalogApi.queryEntities).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query,
+          limit: 0,
+        }),
+      );
+    });
   });
 });
