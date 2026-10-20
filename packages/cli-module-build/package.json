@@ -1,6 +1,6 @@
 {
   "name": "@backstage/cli-module-build",
-  "version": "0.1.9-next.1",
+  "version": "0.1.9-next.2",
   "description": "CLI module for Backstage CLI",
   "backstage": {
     "role": "cli-module"
@@ -36,6 +36,7 @@
   },
   "jest": {
     "coveragePathIgnorePatterns": [
+      "/node_modules/",
       "/__fixtures__/"
     ]
   },
